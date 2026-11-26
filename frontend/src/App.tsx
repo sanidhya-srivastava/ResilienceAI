@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { connectLiveSocket } from "./api";
 import { AgentFeed } from "./components/AgentFeed";
+import { IncidentDetail } from "./components/IncidentDetail";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { ScenarioSelector } from "./components/ScenarioSelector";
 import { useStore } from "./store";
@@ -12,6 +13,7 @@ export function App() {
   const handleWsMessage = useStore((s) => s.handleWsMessage);
   const setWsConnected = useStore((s) => s.setWsConnected);
   const loadHistory = useStore((s) => s.loadHistory);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadHistory();
@@ -66,7 +68,12 @@ export function App() {
           </h2>
           <div className="divide-y divide-slate-800 text-xs">
             {history.slice(0, 5).map((inc) => (
-              <div key={inc.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <button
+                key={inc.id}
+                type="button"
+                onClick={() => setSelectedIncidentId(inc.id)}
+                className="flex w-full flex-wrap items-center justify-between gap-2 rounded px-2 py-2.5 text-left transition-colors hover:bg-slate-800/60"
+              >
                 <span className="font-mono text-slate-300">{inc.id.slice(0, 8)}</span>
                 <span className="capitalize text-slate-200">{inc.scenario.replace(/_/g, " ")}</span>
                 <span
@@ -85,10 +92,17 @@ export function App() {
                     ? `${inc.total_duration_seconds.toFixed(3)}s`
                     : "—"}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </section>
+      )}
+
+      {selectedIncidentId && (
+        <IncidentDetail
+          incidentId={selectedIncidentId}
+          onClose={() => setSelectedIncidentId(null)}
+        />
       )}
     </main>
   );

@@ -1,4 +1,5 @@
 import type {
+  IncidentDetail,
   IncidentSummary,
   RecoveryMetrics,
   ScenarioInfo,
@@ -40,6 +41,8 @@ export const api = {
       body: JSON.stringify({ scenario }),
     }),
   fetchIncidents: () => request<IncidentSummary[]>("/incidents"),
+  fetchIncidentDetail: (incidentId: string) =>
+    request<IncidentDetail>(`/incidents/${incidentId}`),
   fetchMetrics: (incidentId: string) =>
     request<RecoveryMetrics>(`/incidents/${incidentId}/metrics`),
 };

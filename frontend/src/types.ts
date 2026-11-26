@@ -42,6 +42,23 @@ export interface IncidentSummary {
   total_duration_seconds: number | null;
 }
 
+export interface AgentAction {
+  id?: number | null;
+  incident_id: string;
+  agent_name: string;
+  action_type: string;
+  input_summary: string | null;
+  output_summary: string | null;
+  success: boolean;
+  duration_ms: number | null;
+  timestamp: string;
+}
+
+export interface IncidentDetail extends IncidentSummary {
+  agent_actions: AgentAction[];
+  metrics: RecoveryMetrics | null;
+}
+
 export interface TriggerDisasterResponse {
   incident_id: string;
   status: string;

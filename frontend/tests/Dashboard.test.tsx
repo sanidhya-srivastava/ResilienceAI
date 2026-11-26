@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App } from "../src/App";
 import { api } from "../src/api";
 import { AgentFeed } from "../src/components/AgentFeed";
 import { MetricsPanel } from "../src/components/MetricsPanel";
@@ -19,6 +20,10 @@ describe("ResilienceAI Dashboard Store & Components", () => {
       },
     ]);
     vi.spyOn(api, "fetchIncidents").mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("starts in idle state with 5 pending agents", () => {
@@ -109,5 +114,86 @@ describe("ResilienceAI Dashboard Store & Components", () => {
     rerender(<MetricsPanel />);
     expect(screen.getByText(/Recovery Succeeded/i)).toBeInTheDocument();
     expect(screen.getByText(/1.250s/i)).toBeInTheDocument();
+  });
+
+  it("opens IncidentDetail modal when clicking a recent incident row and closes it", async () => {
+    vi.stubGlobal(
+      "WebSocket",
+      class MockWebSocket {
+        close() {}
+      }
+    );
+
+    vi.spyOn(api, "fetchIncidents").mockResolvedValue([
+      {
+        id: "inc-hist-001",
+        scenario: "corrupted_config",
+        triggered_at: "2026-11-26T10:00:00Z",
+        status: "recovered",
+        completed_at: "2026-11-26T10:00:03Z",
+        total_duration_seconds: 2.5,
+      },
+    ]);
+
+    vi.spyOn(api, "fetchIncidentDetail").mockResolvedValue({
+      id: "inc-hist-001",
+      scenario: "corrupted_config",
+      triggered_at: "2026-11-26T10:00:00Z",
+      status: "recovered",
+      completed_at: "2026-11-26T10:00:03Z",
+      total_duration_seconds: 2.5,
+      agent_actions: [
+        {
+          id: 1,
+          incident_id: "inc-hist-001",
+          agent_name: "monitor",
+          action_type: "detect",
+          input_summary: "Probed nginx container",
+          output_summary: "Detected HTTP 502 error on config reload",
+          success: true,
+          duration_ms: 120,
+          timestamp: "2026-11-26T10:00:01Z",
+        },
+        {
+          id: 2,
+          incident_id: "inc-hist-001",
+          agent_name: "verify",
+          action_type: "verify",
+          input_summary: "Checked health endpoint",
+          output_summary: "Health checks passed after config rollback",
+          success: true,
+          duration_ms: 180,
+          timestamp: "2026-11-26T10:00:03Z",
+        },
+      ],
+      metrics: {
+        incident_id: "inc-hist-001",
+        mttr_seconds: 2.5,
+        detection_time_seconds: 0.3,
+        diagnosis_time_seconds: 0.6,
+        planning_time_seconds: 0.4,
+        recovery_time_seconds: 0.8,
+        verification_time_seconds: 0.4,
+        replan_count: 1,
+        recovery_strategy: "restore_config",
+        success: true,
+      },
+    });
+
+    render(<App />);
+
+    const rowButton = await screen.findByRole("button", { name: /inc-hist/i });
+    fireEvent.click(rowButton);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Agent Action Log (2)");
+    expect(dialog).toHaveTextContent("Detected HTTP 502 error on config reload");
+    expect(dialog).toHaveTextContent("restore_config");
+    expect(dialog).toHaveTextContent("2.500s");
+
+    fireEvent.click(screen.getByRole("button", { name: /Close incident details/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 });
