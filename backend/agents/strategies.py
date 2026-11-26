@@ -71,6 +71,15 @@ STRATEGY_CATALOG: dict[str, list[RecoveryStrategy]] = {
     ],
     "disk_full": [
         RecoveryStrategy(
+            name="cleanup_disk",
+            steps=[
+                "Identify large temporary fill files on affected service",
+                "Prune temporary fill files and stale logs",
+                "Verify disk headroom restored",
+            ],
+            estimated_rto_seconds=25,
+        ),
+        RecoveryStrategy(
             name="restore_from_backup",
             steps=[
                 "Free disk space by pruning old logs and temp files",
@@ -78,6 +87,44 @@ STRATEGY_CATALOG: dict[str, list[RecoveryStrategy]] = {
                 "Restart affected container",
             ],
             estimated_rto_seconds=90,
+        ),
+    ],
+    "config_corruption": [
+        RecoveryStrategy(
+            name="restart_container",
+            steps=[
+                "Attempt container restart to reload configuration",
+                "Verify HTTP /health endpoint returns 200",
+            ],
+            estimated_rto_seconds=20,
+        ),
+        RecoveryStrategy(
+            name="restore_from_backup",
+            steps=[
+                "Restore clean nginx configuration from backup",
+                "Restart resilience-web-server container",
+                "Verify HTTP /health endpoint returns 200",
+            ],
+            estimated_rto_seconds=60,
+        ),
+    ],
+    "cascading_failure": [
+        RecoveryStrategy(
+            name="ordered_recovery",
+            steps=[
+                "Start resilience-database first and wait for pg_isready",
+                "Restart dependent resilience-web-server container",
+                "Verify end-to-end health across all services",
+            ],
+            estimated_rto_seconds=45,
+        ),
+        RecoveryStrategy(
+            name="restore_from_backup",
+            steps=[
+                "Restore database and web-server from latest backups",
+                "Restart services in dependency order",
+            ],
+            estimated_rto_seconds=180,
         ),
     ],
     "network_partition": [

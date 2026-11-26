@@ -37,8 +37,28 @@ def test_registry_get_unknown_raises_key_error() -> None:
 
 def test_registry_list_all() -> None:
     infos = ScenarioRegistry.list_all()
-    names = [i.name for i in infos]
-    assert "server_crash" in names
+    names = {i.name for i in infos}
+    assert {
+        "server_crash",
+        "database_connection_lost",
+        "oom_kill",
+        "disk_full",
+        "corrupted_config",
+        "cascading_failure",
+    }.issubset(names)
+
+
+def test_tricky_scenarios_inject_and_resolve_in_mock() -> None:
+    for name in (
+        "database_connection_lost",
+        "oom_kill",
+        "disk_full",
+        "corrupted_config",
+        "cascading_failure",
+    ):
+        scenario = ScenarioRegistry.get(name)
+        assert scenario.inject().success is True
+        assert scenario.resolve().success is True
 
 
 def test_describe_returns_scenario_info() -> None:

@@ -116,6 +116,15 @@ def _docker_inspect_check(service_name: str) -> HealthResult:
         client = docker.from_env()
         container = client.containers.get(service_name)
         running = container.status == "running"
+        if running and service_name == "resilience-backup-store":
+            exit_code, _ = container.exec_run(["test", "!", "-f", "/tmp/disk_fill.bin"])
+            if exit_code != 0:
+                return HealthResult(
+                    service=service_name,
+                    healthy=False,
+                    status="disk_full",
+                    error="Scratch storage exhausted (/tmp/disk_fill.bin present)",
+                )
         return HealthResult(
             service=service_name,
             healthy=running,

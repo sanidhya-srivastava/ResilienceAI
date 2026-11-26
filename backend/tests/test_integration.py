@@ -181,3 +181,68 @@ def test_max_replan_guard_stops_infinite_loop() -> None:
 
     assert result["verification_passed"] is False
     assert result["replan_count"] == MAX_REPLANS
+
+
+def test_corrupted_config_triggers_replan_and_recovers(tmp_path: Path) -> None:
+    """corrupted_config exercises Verify -> Plan replanning in GraphRunner MOCK_MODE."""
+    incident_id = "inc-cfg-001"
+    db = Database(str(tmp_path / "cfg.db"))
+    db.init_db()
+    with db.connect() as conn:
+        IncidentRepository.create(
+            conn,
+            Incident(
+                id=incident_id,
+                scenario="corrupted_config",
+                triggered_at="2026-11-26T10:00:00Z",
+                status="in_progress",
+            ),
+        )
+
+    events: list[str] = []
+    final_state = GraphRunner(db).run(
+        incident_id=incident_id,
+        scenario="corrupted_config",
+        triggered_at="2026-11-26T10:00:00Z",
+        ws_callback=lambda name, _partial: events.append(name),
+    )
+
+    assert events == [
+        "monitor", "diagnose", "plan", "recover", "verify", "plan", "recover", "verify"
+    ]
+    assert final_state["recovery_strategy"] == "restore_from_backup"
+    assert final_state["replan_count"] == 1
+    assert final_state["verification_passed"] is True
+
+
+def test_recover_agent_ordered_and_cleanup_strategies(tmp_path: Path) -> None:
+    """RecoverAgent runs cleanup_disk and dependency-ordered DB-first recovery."""
+    from backend.agents.recover_agent import RecoverAgent  # noqa: PLC0415
+
+    db = _init_db(tmp_path, "inc-rec-tricky")
+    agent = RecoverAgent(db)
+
+    disk_out = agent.run({
+        "incident_id": "inc-rec-tricky",
+        "scenario": "disk_full",
+        "triggered_at": "2026-11-26T10:00:00Z",
+        "replan_count": 0,
+        "recovery_strategy": "cleanup_disk",
+        "affected_services": ["resilience-backup-store"],
+    })
+    assert disk_out["recovery_success"] is True
+    assert disk_out["actions_taken"][0]["action"] == "cleanup_disk:resilience-backup-store"
+
+    cascading_out = agent.run({
+        "incident_id": "inc-rec-tricky",
+        "scenario": "cascading_failure",
+        "triggered_at": "2026-11-26T10:00:00Z",
+        "replan_count": 0,
+        "recovery_strategy": "ordered_recovery",
+        "affected_services": ["resilience-web-server", "resilience-database"],
+    })
+    assert cascading_out["recovery_success"] is True
+    assert [a["action"] for a in cascading_out["actions_taken"]] == [
+        "restart:resilience-database",
+        "restart:resilience-web-server",
+    ]

@@ -71,3 +71,37 @@ def get_container_health(name: str) -> str:
         return "not_found"
     except docker.errors.APIError:
         return "error"
+
+
+def kill_container(name: str, signal: str = "SIGKILL") -> dict[str, str]:
+    """Send a signal (default SIGKILL, simulating OOM/crash) to a running container."""
+    if os.getenv("MOCK_MODE", "true").lower() == "true":
+        return {"name": name, "action": "killed", "signal": signal, "mock": "true"}
+    client = _get_client()
+    try:
+        container = client.containers.get(name)
+        container.kill(signal=signal)
+        return {"name": name, "action": "killed", "signal": signal}
+    except docker.errors.NotFound:
+        return {"name": name, "action": "not_found", "error": f"Container '{name}' not found"}
+    except docker.errors.APIError as exc:
+        return {"name": name, "action": "error", "error": str(exc)}
+
+
+def exec_in_container(name: str, command: str) -> dict[str, str | int]:
+    """Execute a shell command inside a running container."""
+    if os.getenv("MOCK_MODE", "true").lower() == "true":
+        return {"name": name, "exit_code": 0, "output": f"[MOCK] ran: {command}", "mock": "true"}
+    client = _get_client()
+    try:
+        container = client.containers.get(name)
+        exit_code, output = container.exec_run(["sh", "-c", command])
+        return {
+            "name": name,
+            "exit_code": int(exit_code),
+            "output": output.decode("utf-8", errors="replace") if output else "",
+        }
+    except docker.errors.NotFound:
+        return {"name": name, "exit_code": 1, "output": f"Container '{name}' not found"}
+    except docker.errors.APIError as exc:
+        return {"name": name, "exit_code": 1, "output": str(exc)}

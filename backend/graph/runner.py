@@ -8,7 +8,7 @@ from collections.abc import Callable
 from backend.db.database import Database
 from backend.db.models import AgentAction, RecoveryMetrics
 from backend.db.repository import ActionRepository, IncidentRepository, MetricsRepository
-from backend.graph.mock_responses import MOCK_AGENT_OUTPUTS
+from backend.graph.mock_responses import MOCK_AGENT_OUTPUTS, MOCK_SCENARIO_SEQUENCES
 from backend.graph.state import RecoveryState
 from backend.simulator.utils import utcnow
 
@@ -49,7 +49,9 @@ class GraphRunner:
         triggered_at: str,
         ws_callback: WsCallback | None,
     ) -> RecoveryState:
-        agent_order = ["monitor", "diagnose", "plan", "recover", "verify"]
+        steps = MOCK_SCENARIO_SEQUENCES.get(
+            scenario, list(MOCK_AGENT_OUTPUTS.items())
+        )
 
         state: RecoveryState = {
             "incident_id": incident_id,
@@ -60,12 +62,12 @@ class GraphRunner:
 
         phase_times: dict[str, float] = {}
 
-        for agent_name in agent_order:
+        for agent_name, template in steps:
             t0 = time.perf_counter()
-            partial = dict(MOCK_AGENT_OUTPUTS.get(agent_name, {}))
+            partial = dict(template)
             state.update(partial)  # type: ignore[typeddict-item]
             elapsed = max(time.perf_counter() - t0, 0.001)
-            phase_times[agent_name] = elapsed
+            phase_times[agent_name] = phase_times.get(agent_name, 0.0) + elapsed
 
             self._log_mock_action(
                 incident_id=incident_id,

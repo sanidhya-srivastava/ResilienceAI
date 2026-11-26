@@ -8,10 +8,14 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from backend.agents.tools.docker_ops import OpResult, restart_container, restore_from_backup
+from backend.agents.tools.docker_ops import (
+    OpResult,
+    cleanup_disk,
+    restart_container,
+    restore_from_backup,
+)
 from backend.graph.base_agent import BaseAgent
 from backend.graph.state import RecoveryState
-from backend.simulator.utils import utcnow
 
 # Maps strategy name → handler function(affected_services) → list[OpResult]
 StrategyHandler = Callable[[list[str]], list[OpResult]]
@@ -29,9 +33,21 @@ def _handle_restore(affected: list[str]) -> list[OpResult]:
     return results
 
 
+def _handle_cleanup_disk(affected: list[str]) -> list[OpResult]:
+    return [cleanup_disk(svc) for svc in affected]
+
+
+def _handle_ordered_recovery(affected: list[str]) -> list[OpResult]:
+    """Recover database dependencies before application containers."""
+    db_first = sorted(affected, key=lambda s: (0 if "database" in s else 1, s))
+    return [restart_container(svc) for svc in db_first]
+
+
 STRATEGY_HANDLERS: dict[str, StrategyHandler] = {
     "restart_container": _handle_restart,
     "restore_from_backup": _handle_restore,
+    "cleanup_disk": _handle_cleanup_disk,
+    "ordered_recovery": _handle_ordered_recovery,
 }
 
 

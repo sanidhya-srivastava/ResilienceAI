@@ -78,6 +78,31 @@ def restore_from_backup(service: str) -> OpResult:
                         service=service, detail=str(exc))
 
 
+def cleanup_disk(service: str) -> OpResult:
+    """Prune temporary fill files and stale logs inside *service*."""
+    if _is_mock_mode():
+        return OpResult(
+            success=True,
+            action="cleanup_disk",
+            service=service,
+            detail=f"[MOCK] Pruned temporary fill files on '{service}'",
+        )
+    try:
+        import docker  # noqa: PLC0415
+        client = docker.from_env()
+        container = client.containers.get(service)
+        exit_code, output = container.exec_run(["sh", "-c", "rm -f /tmp/disk_fill.bin"])
+        return OpResult(
+            success=exit_code == 0,
+            action="cleanup_disk",
+            service=service,
+            detail=output.decode("utf-8", errors="replace") if output else "Disk pruned",
+        )
+    except Exception as exc:
+        return OpResult(success=False, action="cleanup_disk",
+                        service=service, detail=str(exc))
+
+
 def _utcnow() -> str:
     from backend.simulator.utils import utcnow  # noqa: PLC0415
     return utcnow()

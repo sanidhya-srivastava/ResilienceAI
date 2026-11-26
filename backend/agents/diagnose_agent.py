@@ -25,6 +25,8 @@ class DiagnosisSchema(BaseModel):
         "disk_full",
         "network_partition",
         "process_hang",
+        "config_corruption",
+        "cascading_failure",
         "unknown",
     ]
     severity: Literal["critical", "high", "medium", "low"]
